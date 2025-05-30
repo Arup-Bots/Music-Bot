@@ -2,9 +2,11 @@ const TelegramBot = require('node-telegram-bot-api');
 const { request } = require('undici');
 const axios = require('axios');
 const fs = require('fs');
+const { botToken } = require('./config/config');
+const handleButtons = require('./handlers/buttonHandler');
 
-const token = '7962687823:AAEyrUbqWN9T8djVP5pUz4DpDOcprR0KMXc';
-const bot = new TelegramBot(token, { polling: true });
+// Initialize bot
+const bot = new TelegramBot(botToken, { polling: true });
 
 // Welcome message handler
 bot.onText(/\/start/, (msg) => {
@@ -33,7 +35,7 @@ bot.on('message', async (msg) => {
     try {
         const searchingMsg = await bot.sendMessage(chatId, '🔍 Searching for your song...');
 
-        // Search for the song
+        // Search for the song using JioSaavn API
         const searchResponse = await request(`https://saavn.dev/api/search/songs?query=${encodeURIComponent(messageText)}`);
         const searchData = await searchResponse.body.json();
 
@@ -80,52 +82,59 @@ ${song.duration ? `⏱ Duration: ${Math.floor(song.duration / 60)}:${(song.durat
             `;
 
             // Create inline keyboard
-            const inlineKeyboard = {
-                inline_keyboard: [
-                    [
-                        { text: '💝 Donate Now', callback_data: 'donate' },
-                        { text: '🤝 Support', callback_data: 'support' }
-                    ]
-                ]
-            };
+            // In your message handling code where you send the audio
+    const inlineKeyboard = {
+        inline_keyboard: [
+            [
+                { text: '💝 Donate Now', callback_data: 'donate' },
+                { text: '🤝 Support', callback_data: 'support' }
+            ]
+        ]
+    };
 
-            // Send complete message with audio, thumbnail, and buttons
-            await bot.sendAudio(chatId, tempFile, {
-                caption: caption,
-                parse_mode: 'Markdown',
-                title: songName,
-                performer: artistName,
-                thumb: songImage,
-                reply_markup: inlineKeyboard
-            });
+    // Send complete message with audio, thumbnail, and buttons
+    await bot.sendAudio(chatId, tempFile, {
+        caption: caption,
+        parse_mode: 'Markdown',
+        title: songName,
+        performer: artistName,
+        thumb: songImage,
+        reply_markup: inlineKeyboard
+    });
+
 
             // Clean up
             fs.unlinkSync(tempFile);
             await bot.deleteMessage(chatId, searchingMsg.message_id);
 
         } catch (error) {
+            console.error('Download error:', error);
             await bot.editMessageText('❌ Sorry, failed to download the song.', {
                 chat_id: chatId,
                 message_id: searchingMsg.message_id
             });
-            console.error('Download error:', error);
         }
 
     } catch (error) {
-        await bot.sendMessage(chatId, '❌ Sorry, an error occurred while searching for the song.');
         console.error('Search error:', error);
+        await bot.sendMessage(chatId, '❌ Sorry, an error occurred while searching for the song.');
     }
 });
 
-// Handle button callbacks
-bot.on('callback_query', async (query) => {
-    if (query.data === 'donate') {
-        await bot.answerCallbackQuery(query.id, {
-            text: '💝 Donate feature coming soon!'
-        });
-    } else if (query.data === 'support') {
-        await bot.answerCallbackQuery(query.id, {
-            text: '🤝 Support feature coming soon!'
-        });
-    }
+// Initialize button handlers
+handleButtons(bot);
+
+// Error handling
+bot.on('polling_error', (error) => {
+    console.error('Polling error:', error);
 });
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (error) => {
+    console.error('Unhandled Rejection:', error);
+});
+
+console.log('Bot is running...');
